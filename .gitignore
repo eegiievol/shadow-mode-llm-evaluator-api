@@ -19,6 +19,11 @@ build/
 *.log
 logs/
 
+# SQLite trace DB
+*.db
+*.sqlite
+*.sqlite3
+
 # OS / editor
 .DS_Store
 .idea/
