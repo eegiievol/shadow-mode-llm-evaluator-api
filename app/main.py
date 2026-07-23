@@ -10,6 +10,7 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -23,6 +24,7 @@ from pydantic import BaseModel, Field
 _STATIC_DIR = Path(__file__).parent / "static"
 
 from .config import RuntimeConfig, Settings
+from .evaluator import evaluate
 from .llm_client import DOInferenceClient, LLMClient
 from .metrics import Metrics
 from .shadow import ShadowExecutor, ShadowJob
@@ -111,6 +113,43 @@ def create_app(
         )
 
         return ChatResponse(model=settings_.primary_model, response=primary_text)
+
+    @app.post("/debug/chat")
+    async def debug_chat(req: ChatRequest) -> dict[str, Any]:
+        """Debug helper: call BOTH models and return both answers + verdict.
+
+        This bypasses the shadow pipeline (does not touch metrics) so you can
+        directly see what the candidate produced. Not part of the production
+        shadow flow — the user-facing path is POST /v1/chat.
+        """
+        settings_: Settings = app.state.settings
+
+        async def safe(model: str, timeout: float) -> tuple[str | None, str | None]:
+            try:
+                return await app.state.client.chat(model, req.messages, timeout), None
+            except Exception as exc:  # noqa: BLE001 - surface any failure to the caller
+                return None, str(exc)
+
+        (p_text, p_err), (c_text, c_err) = await asyncio.gather(
+            safe(settings_.primary_model, settings_.primary_timeout),
+            safe(settings_.candidate_model, settings_.candidate_timeout),
+        )
+        result = evaluate(p_text, c_text)
+        return {
+            "primary": {
+                "model": settings_.primary_model,
+                "response": p_text,
+                "error": p_err,
+                "action": result.primary_action,
+            },
+            "candidate": {
+                "model": settings_.candidate_model,
+                "response": c_text,
+                "error": c_err,
+                "action": result.candidate_action,
+            },
+            "action_match": result.action_match,
+        }
 
     @app.get("/metrics")
     async def metrics_endpoint() -> dict[str, Any]:

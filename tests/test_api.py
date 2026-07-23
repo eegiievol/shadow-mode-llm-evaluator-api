@@ -142,6 +142,40 @@ async def test_healthz(tmp_db):
             assert (await http.get("/healthz")).json()["status"] == "ok"
 
 
+async def test_debug_chat_returns_both_models(tmp_db):
+    def responder(model, messages):
+        return '{"action": "buy"}' if model == "primary-x" else '{"action": "sell"}'
+
+    app, _, _ = _make_app(responder, tmp_db)
+    async with app.router.lifespan_context(app):
+        async with await _client(app) as http:
+            resp = await http.post(
+                "/debug/chat", json={"messages": [{"role": "u", "content": "x"}]}
+            )
+            assert resp.status_code == 200
+            d = resp.json()
+            assert d["primary"]["model"] == "primary-x"
+            assert d["candidate"]["model"] == "candidate-y"
+            assert d["primary"]["action"] == "buy"
+            assert d["candidate"]["action"] == "sell"
+            assert d["action_match"] is False
+
+
+async def test_debug_chat_isolates_candidate_error(tmp_db):
+    def responder(model, messages):
+        if model == "candidate-y":
+            raise RuntimeError("candidate down")
+        return '{"action": "buy"}'
+
+    app, _, _ = _make_app(responder, tmp_db)
+    async with app.router.lifespan_context(app):
+        async with await _client(app) as http:
+            d = (await http.post("/debug/chat", json={"messages": [{"role": "u", "content": "x"}]})).json()
+            assert d["primary"]["response"] == '{"action": "buy"}'
+            assert d["candidate"]["error"] is not None
+            assert d["action_match"] is False
+
+
 async def test_index_serves_chat_ui(tmp_db):
     app, _, _ = _make_app(lambda m, msg: '{"action": "buy"}', tmp_db)
     async with app.router.lifespan_context(app):

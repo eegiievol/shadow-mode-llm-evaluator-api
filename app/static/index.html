@@ -73,6 +73,21 @@
     }
     button:disabled { opacity: .5; cursor: default; }
     .hint { color: var(--muted); font-size: 11px; margin-top: 6px; text-align: center; }
+    .toggle { display: flex; align-items: center; gap: 8px; margin-top: 10px;
+      color: var(--muted); font-size: 12px; cursor: pointer; user-select: none; }
+    .toggle input { accent-color: var(--accent); width: 15px; height: 15px; }
+    .compare { display: flex; flex-direction: column; gap: 8px; align-self: stretch; max-width: 100%; }
+    .compare .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    @media (max-width: 560px) { .compare .cols { grid-template-columns: 1fr; } }
+    .col { background: var(--bot); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+    .col .tag { font-size: 11px; color: var(--muted); margin-bottom: 5px; }
+    .col .tag b { color: var(--text); }
+    .col.primary { border-color: var(--accent); }
+    .col.candidate { border-color: var(--accent-2); }
+    .col .ans { white-space: pre-wrap; word-wrap: break-word; font-size: 13.5px; line-height: 1.45; }
+    .verdict { align-self: center; font-size: 12px; font-weight: 600; padding: 3px 12px; border-radius: 999px; }
+    .verdict.match { background: rgba(110,231,183,.18); color: var(--accent-2); }
+    .verdict.differ { background: rgba(255,107,107,.16); color: var(--danger); }
     .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
       background: var(--accent-2); margin-right: 5px; vertical-align: middle; }
   </style>
@@ -93,6 +108,10 @@
       <textarea id="input" placeholder="Type a message…  (Enter to send, Shift+Enter for newline)" autofocus></textarea>
       <button id="send" type="submit">Send</button>
     </form>
+    <label class="toggle">
+      <input type="checkbox" id="debug" />
+      <span>Show shadow candidate (debug) — display both models side by side</span>
+    </label>
     <div class="hint">Primary responses are shown instantly; shadow evaluation happens asynchronously. Metrics refresh every 3s.</div>
   </div>
 
@@ -120,9 +139,21 @@
       return bubble;
     }
 
+    const debugToggle = document.getElementById('debug');
+
     async function send(text) {
       addMsg(text, 'You');
       sendBtn.disabled = true;
+      if (debugToggle.checked) {
+        await sendCompare(text);
+      } else {
+        await sendShadow(text);
+      }
+      sendBtn.disabled = false;
+      refreshMetrics();
+    }
+
+    async function sendShadow(text) {
       const pending = addMsg('…', 'Model');
       try {
         const res = await fetch('/v1/chat', {
@@ -137,10 +168,39 @@
       } catch (e) {
         pending.classList.add('err');
         pending.textContent = '⚠ ' + e.message;
-      } finally {
-        sendBtn.disabled = false;
-        refreshMetrics();
       }
+    }
+
+    async function sendCompare(text) {
+      if (empty) empty.remove?.();
+      const wrap = document.createElement('div');
+      wrap.className = 'msg bot compare';
+      wrap.innerHTML =
+        '<div class="cols">' +
+          '<div class="col primary"><div class="tag">PRIMARY · <b id="pm">…</b></div><div class="ans" id="pa">…</div></div>' +
+          '<div class="col candidate"><div class="tag">CANDIDATE (shadow) · <b id="cm">…</b></div><div class="ans" id="ca">…</div></div>' +
+        '</div><div class="verdict" id="vd">evaluating…</div>';
+      chat.appendChild(wrap);
+      chat.scrollTop = chat.scrollHeight;
+      try {
+        const res = await fetch('/debug/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: [{ role: 'user', content: text }] }),
+        });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.detail || ('HTTP ' + res.status));
+        wrap.querySelector('#pm').textContent = d.primary.model;
+        wrap.querySelector('#cm').textContent = d.candidate.model;
+        wrap.querySelector('#pa').textContent = d.primary.error ? ('⚠ ' + d.primary.error) : d.primary.response;
+        wrap.querySelector('#ca').textContent = d.candidate.error ? ('⚠ ' + d.candidate.error) : d.candidate.response;
+        const vd = wrap.querySelector('#vd');
+        vd.textContent = d.action_match ? 'MATCH ✅ (actions agree)' : 'DIFFER ❌ (actions disagree)';
+        vd.classList.add(d.action_match ? 'match' : 'differ');
+      } catch (e) {
+        wrap.querySelector('#vd').textContent = '⚠ ' + e.message;
+      }
+      chat.scrollTop = chat.scrollHeight;
     }
 
     form.addEventListener('submit', (e) => {
