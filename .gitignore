@@ -28,3 +28,9 @@ logs/
 .DS_Store
 .idea/
 .vscode/
+
+# Windows / WSL artifacts
+*:Zone.Identifier
+
+# Assessment brief (kept local, not part of the deliverable)
+docs/*.pdf

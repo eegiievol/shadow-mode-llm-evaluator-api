@@ -176,7 +176,7 @@ All settings are read from the environment (or a `.env` file). See
 | `DO_INFERENCE_BASE_URL` | `https://inference.do-ai.run/v1` | Inference API base URL. |
 | `DO_INFERENCE_API_KEY` | _(empty)_ | Serverless Inference model access key. |
 | `PRIMARY_MODEL` | `llama3.3-70b-instruct` | Model that serves users. |
-| `CANDIDATE_MODEL` | `openai-gpt-4o-mini` | Model evaluated in shadow. |
+| `CANDIDATE_MODEL` | `deepseek-3.2` | Model evaluated in shadow. |
 | `PRIMARY_TIMEOUT` | `30` | Primary call timeout (s). |
 | `CANDIDATE_TIMEOUT` | `10` | Candidate call timeout (s). |
 | `SHADOW_QUEUE_SIZE` | `100` | Bounded queue depth (memory cap). |
@@ -188,6 +188,10 @@ All settings are read from the environment (or a `.env` file). See
 
 See [`docs/architecture.md`](docs/architecture.md) for the full flow diagram
 and a description of the synchronous return path vs. the decoupled shadow pool.
+
+For a point-by-point mapping of every assessment requirement to its
+implementation and test, see
+[`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md).
 
 ### Extensions implemented
 
