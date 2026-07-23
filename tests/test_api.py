@@ -140,3 +140,12 @@ async def test_healthz(tmp_db):
     async with app.router.lifespan_context(app):
         async with await _client(app) as http:
             assert (await http.get("/healthz")).json()["status"] == "ok"
+
+
+async def test_index_serves_chat_ui(tmp_db):
+    app, _, _ = _make_app(lambda m, msg: '{"action": "buy"}', tmp_db)
+    async with app.router.lifespan_context(app):
+        async with await _client(app) as http:
+            resp = await http.get("/")
+            assert resp.status_code == 200
+            assert "Shadow-Mode LLM Evaluator" in resp.text

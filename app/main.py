@@ -12,11 +12,15 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+
+_STATIC_DIR = Path(__file__).parent / "static"
 
 from .config import RuntimeConfig, Settings
 from .llm_client import DOInferenceClient, LLMClient
@@ -127,6 +131,10 @@ def create_app(
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/", include_in_schema=False)
+    async def index() -> FileResponse:
+        return FileResponse(_STATIC_DIR / "index.html")
 
     return app
 
