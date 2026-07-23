@@ -1,0 +1,23 @@
+[Unit]
+Description=Shadow-Mode LLM Evaluator API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=appuser
+WorkingDirectory=/opt/shadow-evaluator
+# Secrets live here, readable only by appuser (chmod 600). Never committed.
+EnvironmentFile=/opt/shadow-evaluator/.env
+ExecStart=/opt/shadow-evaluator/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
+Restart=always
+RestartSec=3
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
